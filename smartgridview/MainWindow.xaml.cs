@@ -27,7 +27,7 @@ namespace smartgridview
             // デフォルトキーワードをここにリストで初期化
             public List<string> ExtractionKeywords { get; set; } = new List<string>
             {
-                "郵便番号", "住所", "電話番号", "性", "名", "名前", "姓名", "カナ"
+                "郵便番号", "住所", "電話番号", "姓", "名", "名前", "姓名", "カナ"
             };
         }
 
@@ -178,8 +178,10 @@ namespace smartgridview
 
             DataTable dt = new DataTable();
             string[] firstLineCells = lines[0].Split(delimiter);
+
+            // どの列をDataTableに追加したかを記録するリスト
+            List<int> includedColumnIndices = new List<int>();
             List<string> columnNames = new List<string>();
-            List<int> validColumnIndices = new List<int>();
 
             // 抽出キーワード設定の取得
             bool isExtractionMode = chkExtractionMode.IsChecked ?? false;
@@ -189,13 +191,10 @@ namespace smartgridview
             {
                 string colName = firstLineCells[i].Trim(' ', '"');
 
-                // 抽出モード時のフィルタリング
                 if (isExtractionMode && keywords.Count > 0)
                 {
                     if (!keywords.Exists(k => colName.Contains(k))) continue;
                 }
-
-                if (string.IsNullOrEmpty(colName)) colName = $"列 {i + 1}";
 
                 string uniqueColName = colName;
                 int counter = 1;
@@ -206,7 +205,7 @@ namespace smartgridview
 
                 dt.Columns.Add(uniqueColName, typeof(string));
                 columnNames.Add(uniqueColName);
-                validColumnIndices.Add(i);
+                includedColumnIndices.Add(i);
             }
 
             dt.BeginLoadData();
@@ -215,9 +214,9 @@ namespace smartgridview
                 string[] cells = lines[r].Split(delimiter);
                 DataRow dr = dt.NewRow();
 
-                for (int i = 0; i < validColumnIndices.Count; i++)
+                for (int i = 0; i < includedColumnIndices.Count; i++)
                 {
-                    int originalIndex = validColumnIndices[i];
+                    int originalIndex = includedColumnIndices[i];
                     if (originalIndex < cells.Length)
                     {
                         dr[columnNames[i]] = cells[originalIndex].Trim(' ', '"');
@@ -226,6 +225,24 @@ namespace smartgridview
                 dt.Rows.Add(dr);
             }
             dt.EndLoadData();
+
+            // ★ここに追加：データが全行空の列を削除するロジック
+            for (int i = dt.Columns.Count - 1; i >= 0; i--)
+            {
+                bool hasData = false;
+                foreach (DataRow row in dt.Rows)
+                {
+                    if (!string.IsNullOrWhiteSpace(row[i].ToString()))
+                    {
+                        hasData = true;
+                        break;
+                    }
+                }
+                if (!hasData)
+                {
+                    dt.Columns.RemoveAt(i);
+                }
+            }
 
             dataGrid1.Columns.Clear();
             dataGrid1.ItemsSource = dt.DefaultView;
