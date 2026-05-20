@@ -1,7 +1,7 @@
 ﻿<Window x:Class="smartgridview.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="スマートデータグリッドビュー (貼り付け &amp; D&amp;D &amp; ダブルクリックコピー)" Height="500" Width="800"
+        Title="スマートデータグリッドビュー" Height="500" Width="800"
         PreviewKeyDown="Window_PreviewKeyDown"
         AllowDrop="True"
         Drop="Window_Drop">
@@ -11,9 +11,15 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Margin="10" 
-                   Text="データを貼り付け(Ctrl+V)またはD&amp;Dしてください。各セルをダブルクリックすると内容をコピーします。" 
-                   Foreground="Gray" HorizontalAlignment="Center"/>
+        <DockPanel Grid.Row="0" Margin="10">
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                <CheckBox x:Name="chkExtractionMode" Content="抽出モード" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <Button Content="⚙ 設定" Click="SettingsButton_Click" Margin="0,0,5,0" Padding="5,0"/>
+                <Button Content="ℹ About" Click="AboutButton_Click" Padding="5,0"/>
+            </StackPanel>
+            <TextBlock Text="データを貼り付け(Ctrl+V)またはD&amp;D。" 
+                       Foreground="Gray" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </DockPanel>
 
         <DataGrid x:Name="dataGrid1" 
                   Grid.Row="1"
