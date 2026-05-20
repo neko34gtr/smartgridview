@@ -154,6 +154,9 @@ namespace smartgridview
                 columnNames.Add(uniqueColName);
             }
 
+            // 大量データ処理の高速化のため、DataTableのインデックス更新を抑制
+            dt.BeginLoadData();
+
             for (int r = 1; r < lines.Length; r++)
             {
                 string[] cells = lines[r].Split(delimiter);
@@ -167,6 +170,8 @@ namespace smartgridview
 
                 dt.Rows.Add(dr);
             }
+
+            dt.EndLoadData();
 
             dataGrid1.Columns.Clear();
             dataGrid1.ItemsSource = dt.DefaultView;
