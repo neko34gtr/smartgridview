@@ -1,0 +1,175 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Data;
+using System.IO;
+using System.Text;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Input;
+using System.Windows.Media;
+
+namespace smartgridview
+{
+    public partial class MainWindow : Window
+    {
+        public MainWindow()
+        {
+            InitializeComponent();
+        }
+
+        /// <summary>
+        /// 画面全体でのキー入力を監視し、Ctrl + V を捕捉する
+        /// </summary>
+        private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control && e.Key == Key.V)
+            {
+                if (Clipboard.ContainsText())
+                {
+                    string clipboardText = Clipboard.GetText();
+                    ParseAndDisplayRawData(clipboardText);
+                    e.Handled = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// ファイルが画面にドラッグ＆ドロップされたときの処理
+        /// </summary>
+        private void Window_Drop(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                if (files != null && files.Length > 0)
+                {
+                    string filePath = files[0];
+
+                    try
+                    {
+                        string ext = Path.GetExtension(filePath).ToLower();
+                        if (ext == ".csv" || ext == ".tsv" || ext == ".txt")
+                        {
+                            string fileText = File.ReadAllText(filePath, Encoding.UTF8);
+                            ParseAndDisplayRawData(fileText);
+                        }
+                        else
+                        {
+                            MessageBox.Show("対応していないファイル形式です。CSV、TSV、TXTファイルをドロップしてください。", "通知", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"ファイルの読み込み中にエラーが発生しました:\n{ex.Message}", "エラー", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// データグリッドのセルがダブルクリックされたときの処理（確実なデータソース直結方式）
+        /// </summary>
+        private void dataGrid1_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            // クリックされた位置のビジュアル要素を遡って DataGridCell を探す
+            DependencyObject dep = (DependencyObject)e.OriginalSource;
+            while (dep != null && !(dep is DataGridCell))
+            {
+                dep = VisualTreeHelper.GetParent(dep);
+            }
+
+            if (dep is DataGridCell cell)
+            {
+                // セルが属する「列」のバインド名を取得
+                if (cell.Column is DataGridColumn column && column.Header != null)
+                {
+                    string columnName = column.Header.ToString() ?? string.Empty;
+
+                    // セルが属する「行」のデータソース（DataRowView）を取得
+                    if (cell.DataContext is DataRowView rowView)
+                    {
+                        // 行と列名が一致する位置の生のデータを直接引っ張る
+                        if (rowView.Row.Table.Columns.Contains(columnName))
+                        {
+                            object cellValue = rowView[columnName];
+                            string targetText = cellValue?.ToString() ?? string.Empty;
+
+                            if (!string.IsNullOrEmpty(targetText))
+                            {
+                                try
+                                {
+                                    // クリップボードに確実に格納
+                                    Clipboard.SetText(targetText);
+                                }
+                                catch (Exception ex)
+                                {
+                                    MessageBox.Show($"クリップボードへのコピーに失敗しました:\n{ex.Message}", "エラー", MessageBoxButton.OK, MessageBoxImage.Error);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// テキストデータを解析してDataGridにバインドする（貼り付け・D&D共通）
+        /// </summary>
+        private void ParseAndDisplayRawData(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+
+            string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+            if (lines.Length == 0) return;
+
+            char delimiter = '\t';
+            if (!lines[0].Contains('\t') && lines[0].Contains(','))
+            {
+                delimiter = ',';
+            }
+
+            DataTable dt = new DataTable();
+
+            string[] firstLineCells = lines[0].Split(delimiter);
+            List<string> columnNames = new List<string>();
+
+            for (int i = 0; i < firstLineCells.Length; i++)
+            {
+                string colName = firstLineCells[i].Trim(' ', '"');
+
+                if (string.IsNullOrEmpty(colName))
+                {
+                    colName = $"列 {i + 1}";
+                }
+
+                string uniqueColName = colName;
+                int counter = 1;
+                while (dt.Columns.Contains(uniqueColName))
+                {
+                    uniqueColName = $"{colName}_{counter++}";
+                }
+
+                dt.Columns.Add(uniqueColName, typeof(string));
+                columnNames.Add(uniqueColName);
+            }
+
+            for (int r = 1; r < lines.Length; r++)
+            {
+                string[] cells = lines[r].Split(delimiter);
+                DataRow dr = dt.NewRow();
+
+                int minColumns = Math.Min(columnNames.Count, cells.Length);
+                for (int c = 0; c < minColumns; c++)
+                {
+                    dr[columnNames[c]] = cells[c].Trim(' ', '"');
+                }
+
+                dt.Rows.Add(dr);
+            }
+
+            dataGrid1.Columns.Clear();
+            dataGrid1.ItemsSource = dt.DefaultView;
+        }
+    }
+}

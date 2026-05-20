@@ -1,0 +1,35 @@
+﻿<Window x:Class="smartgridview.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="スマートデータグリッドビュー (貼り付け &amp; D&amp;D &amp; ダブルクリックコピー)" Height="500" Width="800"
+        PreviewKeyDown="Window_PreviewKeyDown"
+        AllowDrop="True"
+        Drop="Window_Drop">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Margin="10" 
+                   Text="データを貼り付け(Ctrl+V)またはD&amp;Dしてください。各セルをダブルクリックすると内容をコピーします。" 
+                   Foreground="Gray" HorizontalAlignment="Center"/>
+
+        <DataGrid x:Name="dataGrid1" 
+                  Grid.Row="1"
+                  AutoGenerateColumns="True" 
+                  HeadersVisibility="All"
+                  RowHeaderWidth="60"
+                  GridLinesVisibility="All"
+                  EnableColumnVirtualization="True"
+                  EnableRowVirtualization="True"
+                  SelectionUnit="Cell"
+                  MouseDoubleClick="dataGrid1_MouseDoubleClick">
+            <DataGrid.CellStyle>
+                <Style TargetType="DataGridCell">
+                    <Setter Property="TextBlock.TextAlignment" Value="Center" />
+                </Style>
+            </DataGrid.CellStyle>
+        </DataGrid>
+    </Grid>
+</Window>
