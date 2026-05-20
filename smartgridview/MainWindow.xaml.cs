@@ -75,14 +75,32 @@ namespace smartgridview
         /// </summary>
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
         {
+            // Ctrl + V (貼り付け処理)
             if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control && e.Key == Key.V)
             {
                 if (Clipboard.ContainsText())
                 {
-                    string clipboardText = Clipboard.GetText();
-                    ParseAndDisplayRawData(clipboardText);
+                    ParseAndDisplayRawData(Clipboard.GetText());
                     e.Handled = true;
                 }
+            }
+            // Ctrl + C (値のみコピー) または Ctrl + Shift + C (ヘッダー付き)
+            else if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control && e.Key == Key.C)
+            {
+                bool withHeader = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+                PerformCopy(withHeader);
+                e.Handled = true;
+            }
+        }
+        private void PerformCopy(bool withHeader)
+        {
+            if (dataGrid1.CurrentCell.Column != null && dataGrid1.CurrentCell.Item is DataRowView rowView)
+            {
+                string colName = dataGrid1.CurrentCell.Column.Header.ToString() ?? "";
+                string cellValue = rowView[colName]?.ToString() ?? "";
+
+                string textToCopy = withHeader ? $"{colName}\t{cellValue}" : cellValue;
+                Clipboard.SetText(textToCopy);
             }
         }
 
