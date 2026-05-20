@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -13,9 +14,60 @@ namespace smartgridview
 {
     public partial class MainWindow : Window
     {
+
+        private const string ConfigFile = "smartgridview.json";
+
         public MainWindow()
         {
             InitializeComponent();
+
+            // イベント登録
+            this.Loaded += MainWindow_Loaded;
+            this.Closing += MainWindow_Closing;
+        }
+
+        // ウィンドウ状態を記録するためのクラス
+        private class WindowConfig
+        {
+            public double Top { get; set; }
+            public double Left { get; set; }
+            public double Width { get; set; }
+            public double Height { get; set; }
+        }
+
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (File.Exists(ConfigFile))
+            {
+                try
+                {
+                    string json = File.ReadAllText(ConfigFile, new UTF8Encoding(false));
+                    var config = JsonSerializer.Deserialize<WindowConfig>(json);
+                    if (config != null)
+                    {
+                        this.Top = config.Top;
+                        this.Left = config.Left;
+                        this.Width = config.Width;
+                        this.Height = config.Height;
+                        this.WindowStartupLocation = WindowStartupLocation.Manual;
+                    }
+                }
+                catch { /* 設定読み込み失敗時は規定値で動作 */ }
+            }
+        }
+
+        private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+        {
+            var config = new WindowConfig
+            {
+                Top = this.Top,
+                Left = this.Left,
+                Width = this.Width,
+                Height = this.Height
+            };
+
+            string json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(ConfigFile, json, new UTF8Encoding(false));
         }
 
         /// <summary>
