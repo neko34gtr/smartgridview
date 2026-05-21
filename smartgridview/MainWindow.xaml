@@ -34,6 +34,8 @@
 
         <DockPanel Grid.Row="0" Margin="0,0,0,15">
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                <CheckBox x:Name="chkSpreadsheetCompatible" Content="スプレッドシート互換" VerticalAlignment="Center" Margin="0,0,15,0"
+                          ToolTip="チェック時: ヘッダーが空の列も有効"/>
                 <CheckBox x:Name="chkExtractionMode" Content="抽出モード" VerticalAlignment="Center" Margin="0,0,15,0"/>
                 <Button Content="⚙ 設定" Click="SettingsButton_Click" Margin="0,0,10,0"/>
                 <Button Content="ℹ About" Click="AboutButton_Click"/>
@@ -44,14 +46,16 @@
 
         <DataGrid x:Name="dataGrid1" Grid.Row="1"
                   AutoGenerateColumns="True" HeadersVisibility="Column"
-                  GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E0E0E0"
+                  GridLinesVisibility="All" 
+                  VerticalGridLinesBrush="#D0D0D0"
+                  HorizontalGridLinesBrush="#E0E0E0"
                   SelectionUnit="Cell" MouseDoubleClick="dataGrid1_MouseDoubleClick">
             <DataGrid.ColumnHeaderStyle>
                 <Style TargetType="DataGridColumnHeader">
                     <Setter Property="Background" Value="#F0F0F0"/>
                     <Setter Property="Padding" Value="10,5"/>
                     <Setter Property="FontWeight" Value="SemiBold"/>
-                    <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                    <Setter Property="BorderThickness" Value="0,0,1,1"/>
                     <Setter Property="BorderBrush" Value="#D0D0D0"/>
                 </Style>
             </DataGrid.ColumnHeaderStyle>

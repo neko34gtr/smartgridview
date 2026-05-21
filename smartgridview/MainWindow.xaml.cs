@@ -37,18 +37,20 @@ namespace smartgridview
             public double Width { get; set; } = 800;
             public double Height { get; set; } = 500;
             public bool IsExtractionMode { get; set; } = false;
+            public bool IsSpreadsheetCompatible { get; set; } = true;
 
-            // 抽出キーワードと置換名を保持するリスト（全8項目）
+            // 抽出キーワードと置換名を保持するリスト
             public List<KeywordMapping> Mappings { get; set; } = new List<KeywordMapping>
             {
-                new KeywordMapping { Target = "郵便番号", Replacement = "郵便番号" },
-                new KeywordMapping { Target = "住所", Replacement = "住所" },
-                new KeywordMapping { Target = "電話番号", Replacement = "電話番号" },
-                new KeywordMapping { Target = "姓", Replacement = "姓" },
-                new KeywordMapping { Target = "名", Replacement = "名" },
-                new KeywordMapping { Target = "名前", Replacement = "名前" },
-                new KeywordMapping { Target = "姓名", Replacement = "姓名" },
-                new KeywordMapping { Target = "カナ", Replacement = "カナ" }
+                new KeywordMapping { Target = "EU郵便番号", Replacement = "" },
+                new KeywordMapping { Target = "EU住所", Replacement = "" },
+                new KeywordMapping { Target = "EU自宅固定番号", Replacement = "" },
+                new KeywordMapping { Target = "EU携帯番号", Replacement = "" },
+                new KeywordMapping { Target = "EU姓", Replacement = "" },
+                new KeywordMapping { Target = "EU名", Replacement = "" },
+                new KeywordMapping { Target = "名前", Replacement = "" },
+                new KeywordMapping { Target = "姓名", Replacement = "" },
+                new KeywordMapping { Target = "カナ", Replacement = "" }
             };
         }
 
@@ -83,6 +85,7 @@ namespace smartgridview
                     this.Width = _config.Width;
                     this.Height = _config.Height;
                     this.chkExtractionMode.IsChecked = _config.IsExtractionMode;
+                    this.chkSpreadsheetCompatible.IsChecked = _config.IsSpreadsheetCompatible;
                     this.WindowStartupLocation = WindowStartupLocation.Manual;
                 }
                 catch { /* 読み込み失敗時はデフォルト設定を維持 */ }
@@ -99,6 +102,7 @@ namespace smartgridview
             _config.Width = this.Width;
             _config.Height = this.Height;
             _config.IsExtractionMode = chkExtractionMode.IsChecked ?? false;
+            _config.IsSpreadsheetCompatible = chkSpreadsheetCompatible.IsChecked ?? true;
 
             // 整形されたJSON形式でBOM無しUTF-8保存
             string json = JsonSerializer.Serialize(_config, new JsonSerializerOptions { WriteIndented = true });
@@ -190,86 +194,89 @@ namespace smartgridview
         }
 
         /// <summary>
-        /// テキストデータを解析してDataGridにバインドする（貼り付け・D&D共通）
+        /// テキストデータを解析してDataGridにバインドする
         /// </summary>
         private void ParseAndDisplayRawData(string text)
         {
             try
             {
                 if (string.IsNullOrWhiteSpace(text)) return;
-
-                // 改行コードを統一して分割し、空行を除外
-                string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-                if (lines.Length <= 1) return; // ヘッダーのみの場合は処理しない
+                string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+                if (lines.Length <= 1) return;
 
                 char delimiter = lines[0].Contains('\t') ? '\t' : ',';
                 DataTable dt = new DataTable();
                 string[] firstLineCells = lines[0].Split(delimiter);
 
-                List<int> includedColumnIndices = new List<int>();
-                List<string> columnNames = new List<string>();
-                bool isExtractionMode = chkExtractionMode.IsChecked ?? false;
+                // スプレッドシート互換(isCompatible=true)なら、空ヘッダーはスキップ
+                // 互換性なし(isCompatible=false)なら、"Column_i" として名前を強制補完
+                bool isCompatible = chkSpreadsheetCompatible.IsChecked ?? true;
 
-                // 1. ヘッダーの解析
+                // 1. ヘッダー解析：列定義の確定
                 for (int i = 0; i < firstLineCells.Length; i++)
                 {
                     string colName = firstLineCells[i].Trim(' ', '"');
-                    string finalColName = colName;
-                    bool isTarget = true;
 
-                    if (isExtractionMode && _config.Mappings.Count > 0)
+                    if (string.IsNullOrWhiteSpace(colName))
                     {
-                        var match = _config.Mappings.Find(m => colName.Contains(m.Target));
-                        if (match != null)
+                        // スプレッドシート互換(チェック有)なら、無視せず「Column_i」として維持する
+                        // 互換性なし(チェック無)なら、空ヘッダーの列をスキップする
+                        if (isCompatible)
                         {
-                            if (!string.IsNullOrWhiteSpace(match.Replacement)) finalColName = match.Replacement;
+                            colName = $"Column_{i}";
                         }
-                        else isTarget = false;
+                        else
+                        {
+                            continue;
+                        }
                     }
 
-                    if (!isTarget) continue;
-
-                    string uniqueColName = finalColName;
+                    string uniqueName = colName;
                     int counter = 1;
-                    while (dt.Columns.Contains(uniqueColName)) uniqueColName = $"{finalColName}_{counter++}";
+                    while (dt.Columns.Contains(uniqueName)) uniqueName = $"{colName}_{counter++}";
 
-                    dt.Columns.Add(uniqueColName, typeof(string));
-                    columnNames.Add(uniqueColName);
-                    includedColumnIndices.Add(i);
+                    dt.Columns.Add(uniqueName, typeof(string));
                 }
 
-                // 2. データ行の解析（エラーで止めず、列数不足なら無視/空にする）
+                // 2. データ行解析：スプレッドシート同等の補完処理
                 dt.BeginLoadData();
                 for (int r = 1; r < lines.Length; r++)
                 {
-                    string[] cells = lines[r].Split(delimiter);
-                    DataRow dr = dt.NewRow();
-                    bool hasContent = false;
+                    if (string.IsNullOrWhiteSpace(lines[r])) continue;
 
-                    for (int i = 0; i < includedColumnIndices.Count; i++)
+                    string[] rawCells = lines[r].Split(delimiter);
+                    DataRow dr = dt.NewRow();
+
+                    for (int i = 0; i < dt.Columns.Count; i++)
                     {
-                        int originalIndex = includedColumnIndices[i];
-                        if (originalIndex < cells.Length)
+                        if (i < rawCells.Length)
                         {
-                            string val = cells[originalIndex].Trim(' ', '"');
-                            dr[columnNames[i]] = val;
-                            if (!string.IsNullOrWhiteSpace(val)) hasContent = true;
+                            dr[i] = rawCells[i].Trim(' ', '"');
+                        }
+                        else
+                        {
+                            dr[i] = string.Empty;
                         }
                     }
-                    // データが一切含まれない行は追加しない（空行対策）
-                    if (hasContent) dt.Rows.Add(dr);
+                    dt.Rows.Add(dr);
                 }
                 dt.EndLoadData();
 
-                // 3. 全行空の列を除去（後方から）
-                for (int i = dt.Columns.Count - 1; i >= 0; i--)
+                // 3. 抽出モードの適用（後処理として列をフィルタリング）
+                if (chkExtractionMode.IsChecked == true)
                 {
-                    bool hasData = false;
-                    foreach (DataRow row in dt.Rows)
+                    List<string> keepCols = new List<string>();
+                    foreach (DataColumn col in dt.Columns)
                     {
-                        if (!string.IsNullOrWhiteSpace(row[i].ToString())) { hasData = true; break; }
+                        if (_config.Mappings.Exists(m => col.ColumnName.Contains(m.Target)))
+                            keepCols.Add(col.ColumnName);
                     }
-                    if (!hasData) dt.Columns.RemoveAt(i);
+
+                    for (int i = dt.Columns.Count - 1; i >= 0; i--)
+                    {
+                        if (!keepCols.Contains(dt.Columns[i].ColumnName))
+                            dt.Columns.RemoveAt(i);
+                    }
                 }
 
                 dataGrid1.Columns.Clear();
@@ -277,8 +284,7 @@ namespace smartgridview
             }
             catch (Exception ex)
             {
-                // ここまで来てもエラーになるような致命的なケースのみ通知
-                MessageBox.Show($"解析中に問題が発生しました:\n{ex.Message}", "データ解析", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show($"解析エラー:\n{ex.Message}\n{ex.StackTrace}");
             }
         }
     }
