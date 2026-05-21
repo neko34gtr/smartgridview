@@ -197,8 +197,10 @@ namespace smartgridview
             try
             {
                 if (string.IsNullOrWhiteSpace(text)) return;
+
+                // 改行コードを統一して分割し、空行を除外
                 string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-                if (lines.Length == 0) return;
+                if (lines.Length <= 1) return; // ヘッダーのみの場合は処理しない
 
                 char delimiter = lines[0].Contains('\t') ? '\t' : ',';
                 DataTable dt = new DataTable();
@@ -206,23 +208,21 @@ namespace smartgridview
 
                 List<int> includedColumnIndices = new List<int>();
                 List<string> columnNames = new List<string>();
-
                 bool isExtractionMode = chkExtractionMode.IsChecked ?? false;
 
+                // 1. ヘッダーの解析
                 for (int i = 0; i < firstLineCells.Length; i++)
                 {
                     string colName = firstLineCells[i].Trim(' ', '"');
                     string finalColName = colName;
                     bool isTarget = true;
 
-                    // 抽出モード時の判定と置換処理（空白の場合は元のヘッダー名を使用）
                     if (isExtractionMode && _config.Mappings.Count > 0)
                     {
                         var match = _config.Mappings.Find(m => colName.Contains(m.Target));
                         if (match != null)
                         {
-                            if (!string.IsNullOrWhiteSpace(match.Replacement))
-                                finalColName = match.Replacement;
+                            if (!string.IsNullOrWhiteSpace(match.Replacement)) finalColName = match.Replacement;
                         }
                         else isTarget = false;
                     }
@@ -238,21 +238,30 @@ namespace smartgridview
                     includedColumnIndices.Add(i);
                 }
 
+                // 2. データ行の解析（エラーで止めず、列数不足なら無視/空にする）
                 dt.BeginLoadData();
                 for (int r = 1; r < lines.Length; r++)
                 {
                     string[] cells = lines[r].Split(delimiter);
                     DataRow dr = dt.NewRow();
+                    bool hasContent = false;
+
                     for (int i = 0; i < includedColumnIndices.Count; i++)
                     {
                         int originalIndex = includedColumnIndices[i];
-                        if (originalIndex >= 0 && originalIndex < cells.Length)
-                            dr[columnNames[i]] = cells[originalIndex].Trim(' ', '"');
+                        if (originalIndex < cells.Length)
+                        {
+                            string val = cells[originalIndex].Trim(' ', '"');
+                            dr[columnNames[i]] = val;
+                            if (!string.IsNullOrWhiteSpace(val)) hasContent = true;
+                        }
                     }
-                    dt.Rows.Add(dr);
+                    // データが一切含まれない行は追加しない（空行対策）
+                    if (hasContent) dt.Rows.Add(dr);
                 }
                 dt.EndLoadData();
 
+                // 3. 全行空の列を除去（後方から）
                 for (int i = dt.Columns.Count - 1; i >= 0; i--)
                 {
                     bool hasData = false;
@@ -268,7 +277,8 @@ namespace smartgridview
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"解析エラー:\n{ex.Message}");
+                // ここまで来てもエラーになるような致命的なケースのみ通知
+                MessageBox.Show($"解析中に問題が発生しました:\n{ex.Message}", "データ解析", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
     }
