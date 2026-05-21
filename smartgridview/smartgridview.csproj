@@ -6,6 +6,11 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<UseWpf>true</UseWpf>
+		<ApplicationIcon>smartgridview.ico</ApplicationIcon>
 	</PropertyGroup>
+
+	<ItemGroup>
+	  <Content Include="smartgridview.ico" />
+	</ItemGroup>
 
 </Project>

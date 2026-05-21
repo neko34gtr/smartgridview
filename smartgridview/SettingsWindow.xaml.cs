@@ -1,29 +1,38 @@
 ﻿using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Windows;
 
 namespace smartgridview
 {
+    /// <summary>
+    /// 設定画面クラス
+    /// </summary>
     public partial class SettingsWindow : Window
     {
-        public List<string> Keywords { get; private set; } = new List<string>();
+        // 画面と同期するマッピングデータ
+        public ObservableCollection<KeywordMapping> Mappings { get; private set; }
 
-        public SettingsWindow(List<string> currentKeywords)
+        /// <summary>
+        /// コンストラクタ：現在のマッピング情報を受け取って初期化
+        /// </summary>
+        public SettingsWindow(List<KeywordMapping> currentMappings)
         {
             InitializeComponent();
-            keywordsTextBox.Text = string.Join("\r\n", currentKeywords);
+            Mappings = new ObservableCollection<KeywordMapping>(currentMappings);
+            mappingGrid.ItemsSource = Mappings;
         }
 
+        /// <summary>
+        /// 保存ボタン押下：結果をTrueにして画面を閉じる
+        /// </summary>
         private void SaveButton_Click(object sender, RoutedEventArgs e)
         {
-            Keywords.Clear();
-            string[] lines = keywordsTextBox.Text.Split(new[] { "\r\n", "\r", "\n" }, System.StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
-            {
-                if (!string.IsNullOrWhiteSpace(line)) Keywords.Add(line.Trim());
-            }
             this.DialogResult = true;
         }
 
+        /// <summary>
+        /// キャンセルボタン押下
+        /// </summary>
         private void CancelButton_Click(object sender, RoutedEventArgs e) => this.Close();
     }
 }

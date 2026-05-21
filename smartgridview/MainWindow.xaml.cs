@@ -12,11 +12,24 @@ using System.Windows.Media;
 
 namespace smartgridview
 {
+    // キーワード抽出とヘッダー置換のためのマッピング構造体
+    public class KeywordMapping
+    {
+        public string Target { get; set; } = "";
+        public string Replacement { get; set; } = "";
+    }
+
+    /// <summary>
+    /// メインウィンドウの処理クラス
+    /// </summary>
     public partial class MainWindow : Window
     {
+        // 設定ファイルの保存パス
         private const string ConfigFile = "smartgridview.json";
 
-        // 設定を保持するクラス
+        /// <summary>
+        /// アプリケーションの設定情報を保持するクラス
+        /// </summary>
         private class AppConfig
         {
             public double Top { get; set; } = 100;
@@ -24,15 +37,27 @@ namespace smartgridview
             public double Width { get; set; } = 800;
             public double Height { get; set; } = 500;
             public bool IsExtractionMode { get; set; } = false;
-            // デフォルトキーワードをここにリストで初期化
-            public List<string> ExtractionKeywords { get; set; } = new List<string>
+
+            // 抽出キーワードと置換名を保持するリスト（全項目復元済み）
+            public List<KeywordMapping> Mappings { get; set; } = new List<KeywordMapping>
             {
-                "郵便番号", "住所", "電話番号", "姓", "名", "名前", "姓名", "カナ"
+                new KeywordMapping { Target = "郵便番号", Replacement = "郵便番号" },
+                new KeywordMapping { Target = "住所", Replacement = "住所" },
+                new KeywordMapping { Target = "電話番号", Replacement = "電話番号" },
+                new KeywordMapping { Target = "姓", Replacement = "姓" },
+                new KeywordMapping { Target = "名", Replacement = "名" },
+                new KeywordMapping { Target = "名前", Replacement = "名前" },
+                new KeywordMapping { Target = "姓名", Replacement = "姓名" },
+                new KeywordMapping { Target = "カナ", Replacement = "カナ" }
             };
         }
 
+        // 現在のアプリケーション設定インスタンス
         private AppConfig _config = new AppConfig();
 
+        /// <summary>
+        /// コンストラクタ：初期化とイベント登録
+        /// </summary>
         public MainWindow()
         {
             InitializeComponent();
@@ -40,12 +65,16 @@ namespace smartgridview
             this.Closing += MainWindow_Closing;
         }
 
+        /// <summary>
+        /// ウィンドウ読み込み時：設定ファイルの読み込みと反映
+        /// </summary>
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             if (File.Exists(ConfigFile))
             {
                 try
                 {
+                    // BOM無しUTF-8として設定ファイルを読み込む
                     string json = File.ReadAllText(ConfigFile, new UTF8Encoding(false));
                     _config = JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
 
@@ -56,10 +85,13 @@ namespace smartgridview
                     this.chkExtractionMode.IsChecked = _config.IsExtractionMode;
                     this.WindowStartupLocation = WindowStartupLocation.Manual;
                 }
-                catch { }
+                catch { /* 読み込み失敗時はデフォルト設定を維持 */ }
             }
         }
 
+        /// <summary>
+        /// ウィンドウ閉鎖時：現在の設定をJSONファイルへ保存
+        /// </summary>
         private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
         {
             _config.Top = this.Top;
@@ -68,19 +100,26 @@ namespace smartgridview
             _config.Height = this.Height;
             _config.IsExtractionMode = chkExtractionMode.IsChecked ?? false;
 
+            // 整形されたJSON形式でBOM無しUTF-8保存
             string json = JsonSerializer.Serialize(_config, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(ConfigFile, json, new UTF8Encoding(false));
         }
 
+        /// <summary>
+        /// 設定ボタンクリック：キーワード設定画面を表示
+        /// </summary>
         private void SettingsButton_Click(object sender, RoutedEventArgs e)
         {
-            var win = new SettingsWindow(_config.ExtractionKeywords) { Owner = this };
+            var win = new SettingsWindow(_config.Mappings) { Owner = this };
             if (win.ShowDialog() == true)
             {
-                _config.ExtractionKeywords = win.Keywords;
+                _config.Mappings = new List<KeywordMapping>(win.Mappings);
             }
         }
 
+        /// <summary>
+        /// Aboutボタンクリック：バージョン情報画面を表示
+        /// </summary>
         private void AboutButton_Click(object sender, RoutedEventArgs e)
         {
             var win = new AboutWindow { Owner = this };
@@ -88,7 +127,7 @@ namespace smartgridview
         }
 
         /// <summary>
-        /// 画面全体でのキー入力を監視し、Ctrl + V を捕捉する
+        /// 画面全体でのキー入力を監視し、Ctrl + V を捕捉してクリップボードから解析
         /// </summary>
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
         {
@@ -114,7 +153,6 @@ namespace smartgridview
                 if (files != null && files.Length > 0)
                 {
                     string filePath = files[0];
-
                     try
                     {
                         string ext = Path.GetExtension(filePath).ToLower();
@@ -123,21 +161,17 @@ namespace smartgridview
                             string fileText = File.ReadAllText(filePath, Encoding.UTF8);
                             ParseAndDisplayRawData(fileText);
                         }
-                        else
-                        {
-                            MessageBox.Show("対応していないファイル形式です。CSV、TSV、TXTファイルをドロップしてください。", "通知", MessageBoxButton.OK, MessageBoxImage.Warning);
-                        }
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show($"ファイルの読み込み中にエラーが発生しました:\n{ex.Message}", "エラー", MessageBoxButton.OK, MessageBoxImage.Error);
+                        MessageBox.Show($"ファイルの読み込み中にエラーが発生しました:\n{ex.Message}");
                     }
                 }
             }
         }
 
         /// <summary>
-        /// データグリッドのセルがダブルクリックされたときの処理（確実なデータソース直結方式）
+        /// データグリッドのセルがダブルクリックされたときの処理（値をクリップボードへコピー）
         /// </summary>
         private void dataGrid1_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
@@ -147,19 +181,10 @@ namespace smartgridview
             if (dep is DataGridCell cell && cell.Column is DataGridColumn column && column.Header != null)
             {
                 string columnName = column.Header.ToString() ?? string.Empty;
-                if (cell.DataContext is DataRowView rowView)
+                if (cell.DataContext is DataRowView rowView && rowView.Row.Table.Columns.Contains(columnName))
                 {
-                    if (rowView.Row.Table.Columns.Contains(columnName))
-                    {
-                        object cellValue = rowView[columnName];
-                        string targetText = cellValue?.ToString() ?? string.Empty;
-
-                        if (!string.IsNullOrEmpty(targetText))
-                        {
-                            try { Clipboard.SetText(targetText); }
-                            catch (Exception ex) { MessageBox.Show($"失敗:\n{ex.Message}", "エラー", MessageBoxButton.OK, MessageBoxImage.Error); }
-                        }
-                    }
+                    string targetText = rowView[columnName]?.ToString() ?? string.Empty;
+                    if (!string.IsNullOrEmpty(targetText)) Clipboard.SetText(targetText);
                 }
             }
         }
@@ -170,38 +195,37 @@ namespace smartgridview
         private void ParseAndDisplayRawData(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
-
             string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
             if (lines.Length == 0) return;
 
             char delimiter = lines[0].Contains('\t') ? '\t' : ',';
-
             DataTable dt = new DataTable();
             string[] firstLineCells = lines[0].Split(delimiter);
 
-            // どの列をDataTableに追加したかを記録するリスト
             List<int> includedColumnIndices = new List<int>();
             List<string> columnNames = new List<string>();
 
-            // 抽出キーワード設定の取得
             bool isExtractionMode = chkExtractionMode.IsChecked ?? false;
-            List<string> keywords = _config.ExtractionKeywords;
 
             for (int i = 0; i < firstLineCells.Length; i++)
             {
                 string colName = firstLineCells[i].Trim(' ', '"');
+                string finalColName = colName;
+                bool isTarget = true;
 
-                if (isExtractionMode && keywords.Count > 0)
+                // 抽出モード時の判定と置換処理
+                if (isExtractionMode && _config.Mappings.Count > 0)
                 {
-                    if (!keywords.Exists(k => colName.Contains(k))) continue;
+                    var match = _config.Mappings.Find(m => colName.Contains(m.Target));
+                    if (match != null) finalColName = match.Replacement;
+                    else isTarget = false;
                 }
 
-                string uniqueColName = colName;
+                if (!isTarget) continue;
+
+                string uniqueColName = finalColName;
                 int counter = 1;
-                while (dt.Columns.Contains(uniqueColName))
-                {
-                    uniqueColName = $"{colName}_{counter++}";
-                }
+                while (dt.Columns.Contains(uniqueColName)) uniqueColName = $"{finalColName}_{counter++}";
 
                 dt.Columns.Add(uniqueColName, typeof(string));
                 columnNames.Add(uniqueColName);
@@ -213,35 +237,24 @@ namespace smartgridview
             {
                 string[] cells = lines[r].Split(delimiter);
                 DataRow dr = dt.NewRow();
-
                 for (int i = 0; i < includedColumnIndices.Count; i++)
                 {
                     int originalIndex = includedColumnIndices[i];
-                    if (originalIndex < cells.Length)
-                    {
-                        dr[columnNames[i]] = cells[originalIndex].Trim(' ', '"');
-                    }
+                    if (originalIndex < cells.Length) dr[columnNames[i]] = cells[originalIndex].Trim(' ', '"');
                 }
                 dt.Rows.Add(dr);
             }
             dt.EndLoadData();
 
-            // ★ここに追加：データが全行空の列を削除するロジック
+            // データが全行空の列を削除するロジック
             for (int i = dt.Columns.Count - 1; i >= 0; i--)
             {
                 bool hasData = false;
                 foreach (DataRow row in dt.Rows)
                 {
-                    if (!string.IsNullOrWhiteSpace(row[i].ToString()))
-                    {
-                        hasData = true;
-                        break;
-                    }
+                    if (!string.IsNullOrWhiteSpace(row[i].ToString())) { hasData = true; break; }
                 }
-                if (!hasData)
-                {
-                    dt.Columns.RemoveAt(i);
-                }
+                if (!hasData) dt.Columns.RemoveAt(i);
             }
 
             dataGrid1.Columns.Clear();
