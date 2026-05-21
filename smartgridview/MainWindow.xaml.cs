@@ -38,7 +38,7 @@ namespace smartgridview
             public double Height { get; set; } = 500;
             public bool IsExtractionMode { get; set; } = false;
 
-            // 抽出キーワードと置換名を保持するリスト（全項目復元済み）
+            // 抽出キーワードと置換名を保持するリスト（全8項目）
             public List<KeywordMapping> Mappings { get; set; } = new List<KeywordMapping>
             {
                 new KeywordMapping { Target = "郵便番号", Replacement = "郵便番号" },
@@ -197,37 +197,33 @@ namespace smartgridview
             try
             {
                 if (string.IsNullOrWhiteSpace(text)) return;
-
-                // 改行コードの種類を問わず分割
                 string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
                 if (lines.Length == 0) return;
 
-                // タブ区切り優先、なければカンマ区切りで判定
                 char delimiter = lines[0].Contains('\t') ? '\t' : ',';
-
                 DataTable dt = new DataTable();
                 string[] firstLineCells = lines[0].Split(delimiter);
 
-                // 抽出対象列のインデックスと列名を記録
                 List<int> includedColumnIndices = new List<int>();
                 List<string> columnNames = new List<string>();
 
-                // 抽出モードの確認とキーワードリストの取得
                 bool isExtractionMode = chkExtractionMode.IsChecked ?? false;
-                List<KeywordMapping> mappings = _config.Mappings;
 
-                // 1行目（ヘッダー）の解析
                 for (int i = 0; i < firstLineCells.Length; i++)
                 {
                     string colName = firstLineCells[i].Trim(' ', '"');
                     string finalColName = colName;
                     bool isTarget = true;
 
-                    // 抽出モードが有効な場合、キーワードを含む列のみを保持
-                    if (isExtractionMode && mappings.Count > 0)
+                    // 抽出モード時の判定と置換処理（空白の場合は元のヘッダー名を使用）
+                    if (isExtractionMode && _config.Mappings.Count > 0)
                     {
-                        var match = mappings.Find(m => colName.Contains(m.Target));
-                        if (match != null) finalColName = match.Replacement;
+                        var match = _config.Mappings.Find(m => colName.Contains(m.Target));
+                        if (match != null)
+                        {
+                            if (!string.IsNullOrWhiteSpace(match.Replacement))
+                                finalColName = match.Replacement;
+                        }
                         else isTarget = false;
                     }
 
@@ -235,64 +231,44 @@ namespace smartgridview
 
                     string uniqueColName = finalColName;
                     int counter = 1;
-                    // 重複列名を避けるためのカウンター
-                    while (dt.Columns.Contains(uniqueColName))
-                    {
-                        uniqueColName = $"{finalColName}_{counter++}";
-                    }
+                    while (dt.Columns.Contains(uniqueColName)) uniqueColName = $"{finalColName}_{counter++}";
 
                     dt.Columns.Add(uniqueColName, typeof(string));
                     columnNames.Add(uniqueColName);
                     includedColumnIndices.Add(i);
                 }
 
-                // 大量データ処理を高速化するためBeginLoadDataを使用
                 dt.BeginLoadData();
                 for (int r = 1; r < lines.Length; r++)
                 {
                     string[] cells = lines[r].Split(delimiter);
                     DataRow dr = dt.NewRow();
-
                     for (int i = 0; i < includedColumnIndices.Count; i++)
                     {
                         int originalIndex = includedColumnIndices[i];
-                        // ここで範囲外アクセスを防止
                         if (originalIndex >= 0 && originalIndex < cells.Length)
-                        {
                             dr[columnNames[i]] = cells[originalIndex].Trim(' ', '"');
-                        }
                     }
                     dt.Rows.Add(dr);
                 }
                 dt.EndLoadData();
 
-                // データが全行空の列を削除するロジック（後方からインデックス削除）
                 for (int i = dt.Columns.Count - 1; i >= 0; i--)
                 {
                     bool hasData = false;
                     foreach (DataRow row in dt.Rows)
                     {
-                        if (!string.IsNullOrWhiteSpace(row[i].ToString()))
-                        {
-                            hasData = true;
-                            break;
-                        }
+                        if (!string.IsNullOrWhiteSpace(row[i].ToString())) { hasData = true; break; }
                     }
-                    if (!hasData)
-                    {
-                        dt.Columns.RemoveAt(i);
-                    }
+                    if (!hasData) dt.Columns.RemoveAt(i);
                 }
 
-                // DataGridをリセットしてデータを表示
                 dataGrid1.Columns.Clear();
                 dataGrid1.ItemsSource = dt.DefaultView;
             }
             catch (Exception ex)
             {
-                // 解析不能なデータが来た場合、アプリを落とさず通知する
-                MessageBox.Show($"解析中にエラーが発生しました。\nフォーマットを確認してください。\n\n詳細: {ex.Message}",
-                                "データ解析エラー", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"解析エラー:\n{ex.Message}");
             }
         }
     }
