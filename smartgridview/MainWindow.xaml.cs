@@ -173,7 +173,17 @@ namespace smartgridview
                 }
             }
         }
-
+        /// <summary>
+        /// データグリッドの右クリック：選択行を詳細ウィンドウで表示
+        /// </summary>
+        private void dataGrid1_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (dataGrid1.SelectedItem is DataRowView rowView)
+            {
+                var win = new VerticalViewWindow(rowView.Row) { Owner = this };
+                win.ShowDialog();
+            }
+        }
         /// <summary>
         /// データグリッドのセルがダブルクリックされたときの処理（値をクリップボードへコピー）
         /// </summary>
@@ -279,6 +289,8 @@ namespace smartgridview
                     }
                 }
 
+                // 既存のItemsSourceをクリアして、競合を防ぐ
+                dataGrid1.ItemsSource = null;
                 dataGrid1.Columns.Clear();
                 dataGrid1.ItemsSource = dt.DefaultView;
             }

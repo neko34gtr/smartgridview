@@ -49,7 +49,10 @@
                   GridLinesVisibility="All" 
                   VerticalGridLinesBrush="#D0D0D0"
                   HorizontalGridLinesBrush="#E0E0E0"
-                  SelectionUnit="Cell" MouseDoubleClick="dataGrid1_MouseDoubleClick">
+                  SelectionMode="Extended"
+                  SelectionUnit="FullRow"
+                  MouseDoubleClick="dataGrid1_MouseDoubleClick"
+                  MouseRightButtonUp="dataGrid1_MouseRightButtonUp">
             <DataGrid.ColumnHeaderStyle>
                 <Style TargetType="DataGridColumnHeader">
                     <Setter Property="Background" Value="#F0F0F0"/>
